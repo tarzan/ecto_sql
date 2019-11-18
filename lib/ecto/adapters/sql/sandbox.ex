@@ -410,6 +410,11 @@ defmodule Ecto.Adapters.SQL.Sandbox do
       purposes, to ensure there is no connection leakage, and can
       be bumped whenever necessary.
 
+    * `:before_checkin` - a function to be run before the connection is
+      checked in again. Use this for example to make sure no side processes
+      are still running that depend on the connection that was checked out
+      during the test.
+
   """
   def checkout(repo, opts \\ []) when is_atom(repo) do
     %{pid: pool, opts: pool_opts} = lookup_meta!(repo)
@@ -418,7 +423,13 @@ defmodule Ecto.Adapters.SQL.Sandbox do
       if Keyword.get(opts, :sandbox, true) do
         [
           post_checkout: &post_checkout(&1, &2, opts),
-          pre_checkin: &pre_checkin(&1, &2, &3, opts)
+          pre_checkin: fn arg1, arg2, arg3 ->
+            if fun = Keyword.get(opts, :before_checkin) do
+              fun.()
+            end
+
+            pre_checkin(arg1, arg2, arg3, opts)
+          end
         ] ++ pool_opts
       else
         pool_opts
